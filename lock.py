@@ -1,9 +1,40 @@
 
-import argparse
+from cryptography import fernet
 import sqlite3
 import hashlib
 from termcolor import colored
+user_status = False
+login_attempts = 3
+def create_user(email_address, password):
+   conn = sqlite3.connect("manager.db")
+   cur = conn.cursor()
+   cur.execute( """CREATE TABLE IF NOT EXISTS user(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, password TEXT)""")
+   hashed = hashlib.sha256(password.encode())
+   passhash = hashed.hexdigest()
+   hashed_user = hashlib.sha256(email_address.encode())
+   userhash = hashed_user.hexdigest()
+   cur.execute('INSERT INTO user(username,password) VALUES(?,?)', (userhash, passhash))
+   conn.commit()
+   conn.close()
 
+def login(email_address,T_password):
+  global user_status
+  conn = sqlite3.connect("manager.db")
+  cur = conn.cursor()
+  cur.execute('SELECT username, password FROM user WHERE username = ?', (hashlib.sha256(email_address.encode()).hexdigest(),))
+  result = cur.fetchone()
+  if result:
+        username, password = result
+        # Hash the provided password and compare with stored one
+        pass_case = hashlib.sha256(T_password.encode()).hexdigest()
+        if password == pass_case:
+            user_status = True
+            print("Login successful!")
+        else:
+            print("Invalid password. Try again.")
+  else:
+        print("User not found. Please check the email address.")
+  conn.close()
 def create_table():
     conn = sqlite3.connect("manager.db")
     cur = conn.cursor()
@@ -40,6 +71,7 @@ def show_password(site):
      print(f"Username: {username}\nPassword: {password}")
     else:
      print("No matching record found.")
+    conn.close()
 
 
 def delete_password(site):
@@ -57,20 +89,29 @@ def delete_password(site):
    cur.execute('INSERT INTO users(password) VALUES (?)', (hashed_final,))
    conn.commit()
    conn.close()'''
+
+
+        
+     
+  
+  
+
+
 def show_all():
      conn = sqlite3.connect("manager.db")
      cur = conn.cursor()
-     cur.execute('SELECT username, password FROM users ')
+     cur.execute('SELECT username, password, site FROM users ')
 
 # Fetch the result
 
      result = cur.fetchall()
 
      if result:
-       for username, password in result:
-        print(f"Username: {username}\nPassword: {password}")
+       for username, password, site in result:
+        print(f"Username: {username}\nPassword: {password}\nSite: {site}")
      else:
       print("No matching record found.")
+     conn.close()
 def main():
 
 
@@ -84,9 +125,26 @@ def main():
    print(colored("                                                     ", 'green'))
    print(colored("                                                     ", 'green'))
 
-   print("Welcome to Lock🔒")
-   status = True
-   while status:
+   
+   action = input("Do you want to create a new account or login? (new/login): ").lower()
+   create_table()  # Ensure table is created before operations
+   if action == "new":
+        email_address = input("Enter your email: ")
+        password = input("Enter your password: ")
+        create_user(email_address, password)
+   elif action == "login":
+        for attempt in range(login_attempts):
+            email_address = input("Enter your email: ")
+            password = input("Enter your password: ")
+            login(email_address, password)
+            if user_status:
+                break
+            else:
+                print(f"Remaining attempts: {login_attempts - attempt - 1}")
+        else:
+            print("Too many failed login attempts. Exiting...")
+            return
+   '''while status:
     choice = input("What do you want to do today?").lower()
     create_table()
     if choice == "add new site":
@@ -103,9 +161,33 @@ def main():
     elif choice == "view all":
       show_all()
     elif choice == quit:
-      status = False
+      status = False'''
+   if user_status:
+        print("Welcome to Lock🔒")
+        status = True
+        while status:
+            choice = input("What do you want to do today? (add/view/delete/view all/quit): ").lower()
+            
+            if choice == "add":
+                username = input("Username: ").lower()
+                site = input("Site: ").lower()
+                password = input("Password: ")
+                insert_details(username, site, password)
+            elif choice == "view":
+                site = input("Site: ").lower()
+                show_password(site)
+            elif choice == "delete":
+                site = input("Site: ").lower()
+                delete_password(site)
+            elif choice == "view all":
+                show_all()
+            elif choice == "quit":
+                status = False
+            else:
+                print("Invalid option. Please try again.")
 
 
 
 if __name__ == "__main__":
    main()
+   
