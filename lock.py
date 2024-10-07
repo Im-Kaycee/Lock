@@ -1,10 +1,42 @@
 
-from cryptography import fernet
+from cryptography.fernet import Fernet
 import sqlite3
 import hashlib
 from termcolor import colored
 user_status = False
 login_attempts = 3
+def generate_key():
+    key = Fernet.generate_key()
+    with open("secret.key", "wb") as key_file:
+        key_file.write(key)
+
+# Load the previously generated key
+def load_key():
+    return open("secret.key", "rb").read()
+import os
+from cryptography.fernet import Fernet
+
+def generate_key():
+    key = Fernet.generate_key()
+    with open("secret.key", "wb") as key_file:
+        key_file.write(key)
+    print("Encryption key generated and saved!")
+
+def check_and_generate_key():
+    key_file = "secret.key"
+    
+    # Check if the file exists
+    if not os.path.exists(key_file):
+        print("No encryption key found. Generating a new one...")
+        generate_key()
+    else:
+        # Check if the file is empty
+        if os.path.getsize(key_file) == 0:
+            print("Encryption key file is empty. Generating a new one...")
+            generate_key()
+        else:
+            print("Encryption key file exists and is not empty.")
+
 def create_user(email_address, password):
    conn = sqlite3.connect("manager.db")
    cur = conn.cursor()
@@ -47,9 +79,12 @@ def insert_details(username,site,password):
     print(username)
     conn = sqlite3.connect("manager.db")
     cur = conn.cursor()
-    hashed = hashlib.sha256(password.encode())
-    hashed_final = hashed.hexdigest()
-    cur.execute('INSERT INTO users (username,site,password) VALUES (?,?,?)', (username,site,hashed_final))
+    #hashed = hashlib.sha256(password.encode())
+    #hashed_final = hashed.hexdigest()
+    key = load_key()
+    f = Fernet(key)
+    encrypted_password = f.encrypt(password.encode())  # Encrypt the password
+    cur.execute('INSERT INTO users (username,site,password) VALUES (?,?,?)', (username,site,encrypted_password))
     conn.commit()
     conn.close()
 '''def insert_site(site):
@@ -59,6 +94,8 @@ def insert_details(username,site,password):
     conn.commit()
     conn.close()'''
 def show_password(site):
+    key = load_key()
+    f = Fernet(key)
     conn = sqlite3.connect("manager.db")
     cur = conn.cursor()
     cur.execute('SELECT username, password FROM users WHERE site = ?', (site,))
@@ -67,8 +104,9 @@ def show_password(site):
     result = cur.fetchone()
 
     if result:
-     username, password = result
-     print(f"Username: {username}\nPassword: {password}")
+     username, encrypted_password = result
+     decrypted_password = f.decrypt(encrypted_password).decode()
+     print(f"Username: {username}\nPassword: {decrypted_password}")
     else:
      print("No matching record found.")
     conn.close()
@@ -98,6 +136,8 @@ def delete_password(site):
 
 
 def show_all():
+     key = load_key()
+     f = Fernet(key)
      conn = sqlite3.connect("manager.db")
      cur = conn.cursor()
      cur.execute('SELECT username, password, site FROM users ')
@@ -107,11 +147,13 @@ def show_all():
      result = cur.fetchall()
 
      if result:
-       for username, password, site in result:
-        print(f"Username: {username}\nPassword: {password}\nSite: {site}")
+       for username, encrypted_password, site in result:
+        decrypted_password = f.decrypt(encrypted_password).decode()
+        print(f"Username: {username}\nPassword: {decrypted_password}\nSite: {site}")
      else:
       print("No matching record found.")
      conn.close()
+
 def main():
 
 
@@ -124,14 +166,14 @@ def main():
    print(colored("░▒▓████████▓▒░▒▓██████▓▒░ ░▒▓██████▓▒░░▒▓█▓▒░░▒▓█▓▒░", 'green'))
    print(colored("                                                     ", 'green'))
    print(colored("                                                     ", 'green'))
-
-   
+   check_and_generate_key()
    action = input("Do you want to create a new account or login? (new/login): ").lower()
    create_table()  # Ensure table is created before operations
    if action == "new":
         email_address = input("Enter your email: ")
         password = input("Enter your password: ")
         create_user(email_address, password)
+        print('User Created Successfully. Login to continue')
    elif action == "login":
         for attempt in range(login_attempts):
             email_address = input("Enter your email: ")
